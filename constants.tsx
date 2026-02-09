@@ -4,7 +4,8 @@ import { PaymentType, UserRole, UserStatus } from './types';
 export const PAYMENT_TYPES = [
   PaymentType.CONTRIBUTION,
   PaymentType.SAVING,
-  PaymentType.DIAMOND_SAVING
+  PaymentType.DIAMOND_SAVING,
+  PaymentType.LOAN_REPAYMENT
 ];
 
 export const INITIAL_ADMINS = [

@@ -8,66 +8,29 @@ import ChangePassword from './components/Auth/ChangePassword';
 import { ClientDashboard } from './frontend/components/Dashboard/ClientDashboard';
 import { ManagerDashboard } from './frontend/components/Dashboard/ManagerDashboard';
 
-// Custom PWA prompt interface
-interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed', platform: string }>;
-  prompt(): Promise<void>;
-}
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [impersonatedUser, setImpersonatedUser] = useState<User | null>(null);
   const [view, setView] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
-  const [loading, setLoading] = useState(true);
-
-  // PWA State
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [loading, setLoading] = useState(false); // Initial loading is now handled by the absence of a user
 
   useEffect(() => {
-    const saved = localStorage.getItem('hub_session');
-    if (saved) {
-      try {
-        setUser(JSON.parse(saved));
-      } catch (e) {
-        localStorage.removeItem('hub_session');
-      }
-    }
+    // In a real application, you would check for a session token here
+    // and attempt to re-authenticate the user with the backend.
+    // For this simulation, user state is cleared on refresh.
     setLoading(false);
-
-    // PWA Logic
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setShowInstallBtn(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
   }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User choice: ${outcome}`);
-    setDeferredPrompt(null);
-    setShowInstallBtn(false);
-  };
 
   const handleLogin = (u: User) => {
     setUser(u);
-    localStorage.setItem('hub_session', JSON.stringify(u));
+    // In a real app, a token would be stored here (e.g., in memory or httpOnly cookie)
+    // localStorage.setItem('hub_session', JSON.stringify(u)); // Removed as per requirements
   };
 
   const handleLogout = () => {
     setUser(null);
     setImpersonatedUser(null);
-    localStorage.removeItem('hub_session');
+    // localStorage.removeItem('hub_session'); // Removed as per requirements
     setView('LOGIN');
   };
 
@@ -98,30 +61,10 @@ const App: React.FC = () => {
                 alt="Contribution Team Logo" 
                 className="w-full h-full object-contain drop-shadow-2xl scale-110 group-hover:scale-125 transition-transform duration-500"
               />
-              {showInstallBtn && (
-                <span className="absolute -top-1 -right-1 flex h-5 w-5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-5 w-5 bg-indigo-600"></span>
-                </span>
-              )}
             </div>
           </div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">CONTRIBUTION TEAM</h1>
           <p className="mt-2 text-[10px] text-indigo-500 font-black uppercase tracking-[0.4em]">Transaction Management App</p>
-          
-          {showInstallBtn && (
-            <div className="mt-8 animate-in slide-in-from-top-4 duration-500">
-              <button 
-                onClick={handleInstallClick}
-                className="inline-flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-full shadow-2xl hover:bg-indigo-700 transition-all hover:-translate-y-1 active:scale-95 border-2 border-indigo-400"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Install App to Device
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="mt-2 animate-in slide-in-from-bottom-8 duration-700 delay-150">

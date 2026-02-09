@@ -1,7 +1,9 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Payment, PaymentStatus, UserStatus, PAYMENT_TYPES, UserRole, Loan, PaymentType } from '../../../types';
 import { api } from '../../apiService';
+import { subscribeToUpdates, RealtimeEvent } from '../../services/realtimeService'; // Import the new realtime service
 
 interface ManagerDashboardProps {
   user: User; // The current admin logged in
@@ -16,17 +18,29 @@ const ApprovalForm: React.FC<{ user: User, onProcessed: () => void }> = ({ user,
   const handleApprove = async () => {
     if (!jersey || !pass) return alert('Please enter both a Jersey Number and Password');
     setLoading(true);
-    await api.approveClient(user.id, jersey, pass);
-    setLoading(false);
-    onProcessed();
+    try {
+      await api.approveClient(user.id, jersey, pass);
+      onProcessed(); // Trigger reload of manager data
+    } catch (error) {
+      console.error('Failed to approve user:', error);
+      alert('Failed to approve user.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReject = async () => {
     if (!window.confirm(`Are you sure you want to reject and delete ${user.name}'s registration?`)) return;
     setLoading(true);
-    await api.rejectClient(user.id);
-    setLoading(false);
-    onProcessed();
+    try {
+      await api.rejectClient(user.id);
+      onProcessed(); // Trigger reload of manager data
+    } catch (error) {
+      console.error('Failed to reject user:', error);
+      alert('Failed to reject user.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,6 +98,7 @@ const ApprovalForm: React.FC<{ user: User, onProcessed: () => void }> = ({ user,
   );
 };
 
+
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user: currentAdmin, onImpersonateClient }) => {
   const [data, setData] = useState<any>(null);
   const [tab, setTab] = useState<'approvals' | 'payments' | 'ledger' | 'loans' | 'team' | 'messaging' | 'settings'>('approvals');
@@ -96,40 +111,39 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user: curren
 
   const load = async () => {
     setIsSyncing(true);
-    const res = await api.getManagerDashboard();
-    setData(res);
-    setTimeout(() => setIsSyncing(false), 800);
+    try {
+      const res = await api.getManagerDashboard();
+      setData(res);
+    } catch (error) {
+      console.error('Failed to load manager dashboard data:', error);
+      // Optionally show an error message
+    } finally {
+      setTimeout(() => setIsSyncing(false), 800);
+    }
   };
 
-  // HYBRID SYNCHRONIZATION HUB
   useEffect(() => {
     load();
     
-    // 1. Storage Event Listener (Best for localStorage inter-tab sync)
-    // This is triggered whenever another tab of the same origin modifies localStorage.
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key?.startsWith('hub_')) {
-        console.log('Storage update detected, syncing manager view...');
+    // Subscribe to real-time updates from the simulated backend
+    const unsubscribe = subscribeToUpdates((event, payload) => {
+      console.log('Real-time update detected:', event, payload);
+      // Trigger a reload of data when relevant events occur
+      // This ensures the manager dashboard is always up-to-date
+      if (
+        event === RealtimeEvent.USER_UPDATED ||
+        event === RealtimeEvent.USER_DELETED ||
+        event === RealtimeEvent.PAYMENT_UPDATED ||
+        event === RealtimeEvent.LOAN_UPDATED ||
+        event === RealtimeEvent.NOTIFICATION_DISPATCHED ||
+        event === RealtimeEvent.SETTINGS_UPDATED
+      ) {
         load();
       }
-    };
-    window.addEventListener('storage', handleStorageChange);
-
-    // 2. BroadcastChannel (Alternative sync for explicit data triggers)
-    const syncChannel = new BroadcastChannel('CT_HUB_SYNC');
-    syncChannel.onmessage = (event) => {
-      if (event.data.type === 'DATA_UPDATED') {
-        load();
-      }
-    };
-
-    // 3. Keep-alive Polling (Optional safety net)
-    const safetyPoll = setInterval(load, 60000);
+    });
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      syncChannel.close();
-      clearInterval(safetyPoll);
+      unsubscribe(); // Cleanup subscription on unmount
     };
   }, []);
 
@@ -140,15 +154,26 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user: curren
   const handleToggleReminders = async () => {
     setIsUpdatingSettings(true);
     const newSettings = { ...data.settings, automatedRemindersEnabled: !data.settings.automatedRemindersEnabled };
-    await api.updateSettings(newSettings);
-    await load();
-    setIsUpdatingSettings(false);
+    try {
+      await api.updateSettings(newSettings);
+      // load() will be called by the realtime service, so no explicit call needed here
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      alert('Failed to update settings.');
+    } finally {
+      setIsUpdatingSettings(false);
+    }
   };
 
   const handleDeleteUser = async (userId: string) => {
     if (!window.confirm('Are you sure you want to delete this client from the database?')) return;
-    await api.deleteUser(userId);
-    await load();
+    try {
+      await api.deleteUser(userId);
+      // load() will be called by the realtime service
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      alert('Failed to delete user.');
+    }
   };
 
   const handleIssueLoan = async (e: React.FormEvent) => {
@@ -158,10 +183,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user: curren
     const client = data.activeClients.find((u: User) => u.id === loanForm.clientId);
     if (!client) return;
     
-    await api.issueLoan(client.id, client.name, parseFloat(loanForm.amount));
-    setLoanForm({ clientId: '', amount: '' });
-    load();
-    alert('Loan issued successfully!');
+    try {
+      await api.issueLoan(client.id, client.name, parseFloat(loanForm.amount));
+      setLoanForm({ clientId: '', amount: '' });
+      alert('Loan issued successfully!');
+      // load() will be called by the realtime service
+    } catch (error) {
+      console.error('Failed to issue loan:', error);
+      alert('Failed to issue loan.');
+    }
   };
 
   if (!data) return (
@@ -330,11 +360,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user: curren
                         {canApprovePayments ? (
                            p.status === PaymentStatus.PENDING ? (
                              <>
-                               <button className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black uppercase rounded-lg hover:bg-green-100" onClick={async () => { await api.processPayment(p.id, PaymentStatus.APPROVED); load(); }}>Approve</button>
-                               <button className="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black uppercase rounded-lg hover:bg-red-100" onClick={async () => { await api.processPayment(p.id, PaymentStatus.REJECTED); load(); }}>Reject</button>
+                               <button className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black uppercase rounded-lg hover:bg-green-100" onClick={async () => { await api.processPayment(p.id, PaymentStatus.APPROVED); /* load() will be called by realtime service */ }}>Approve</button>
+                               <button className="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black uppercase rounded-lg hover:bg-red-100" onClick={async () => { await api.processPayment(p.id, PaymentStatus.REJECTED); /* load() will be called by realtime service */ }}>Reject</button>
                              </>
                            ) : (
-                             <button className="px-3 py-1 bg-slate-50 text-slate-400 text-[10px] font-black uppercase rounded-lg hover:bg-slate-100" onClick={async () => { await api.processPayment(p.id, PaymentStatus.PENDING); load(); }}>Reset</button>
+                             <button className="px-3 py-1 bg-slate-50 text-slate-400 text-[10px] font-black uppercase rounded-lg hover:bg-slate-100" onClick={async () => { await api.processPayment(p.id, PaymentStatus.PENDING); /* load() will be called by realtime service */ }}>Reset</button>
                            )
                         ) : null}
                       </td>
@@ -491,7 +521,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user: curren
                     <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Notification Content</label>
                     <textarea rows={4} className="w-full px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-indigo-500 resize-none shadow-inner font-medium" placeholder="Type your message..." value={msgForm.msg} onChange={e => setMsgForm({...msgForm, msg: e.target.value})} />
                   </div>
-                  <button className="w-full bg-slate-800 text-white font-black py-4 rounded-2xl hover:bg-slate-900 shadow-lg transition-all active:scale-95" onClick={async () => { await api.broadcast(msgForm.target, msgForm.msg); setMsgForm({...msgForm, msg: ''}); alert('Notification Dispatched!'); load(); }}>Dispatch Notification</button>
+                  <button className="w-full bg-slate-800 text-white font-black py-4 rounded-2xl hover:bg-slate-900 shadow-lg transition-all active:scale-95" onClick={async () => { await api.broadcast(msgForm.target, msgForm.msg); setMsgForm({...msgForm, msg: ''}); alert('Notification Dispatched!'); /* load() will be called by realtime service */ }}>Dispatch Notification</button>
                </div>
             </div>
           </div>

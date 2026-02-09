@@ -1,7 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { User, Payment, PaymentType, PaymentStatus, Notification, PAYMENT_TYPES, Loan } from '../../../types';
 import { api } from '../../apiService';
+import { subscribeToUpdates, RealtimeEvent } from '../../services/realtimeService'; // Import the new realtime service
 import { CountdownTimer } from './CountdownTimer';
 
 interface ClientDashboardProps {
@@ -25,11 +27,34 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const [activeView, setActiveView] = useState<'OVERVIEW' | 'LOANS'>('OVERVIEW');
 
   const loadData = async () => {
-    const res = await api.getClientDashboard(user.id);
-    setData(res);
+    try {
+      const res = await api.getClientDashboard(user.id);
+      setData(res);
+    } catch (error) {
+      console.error('Failed to load client dashboard data:', error);
+      // Optionally show an error message to the user
+    }
   };
 
-  useEffect(() => { loadData(); }, [user.id]);
+  useEffect(() => {
+    loadData();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToUpdates((event, payload) => {
+      // Only refresh if the event is relevant to this client's dashboard
+      if (
+        event === RealtimeEvent.PAYMENT_UPDATED ||
+        event === RealtimeEvent.NOTIFICATION_DISPATCHED ||
+        event === RealtimeEvent.LOAN_UPDATED ||
+        event === RealtimeEvent.SETTINGS_UPDATED
+      ) {
+        // More granular checks can be added here, e.g., if payload.clientId === user.id
+        loadData();
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup subscription on unmount
+  }, [user.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,19 +64,25 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     
     const reader = new FileReader();
     reader.onloadend = async () => {
-      await api.submitPayment({
-        clientId: user.id,
-        clientName: user.name,
-        amount: parseFloat(amount),
-        type,
-        receiptUrl: reader.result as string,
-        loanId: type === PaymentType.LOAN_REPAYMENT ? selectedLoanId : undefined
-      });
-      setAmount('');
-      setFile(null);
-      setSelectedLoanId('');
-      setLoading(false);
-      loadData();
+      try {
+        await api.submitPayment({
+          clientId: user.id,
+          clientName: user.name,
+          amount: parseFloat(amount),
+          type,
+          receiptUrl: reader.result as string,
+          loanId: type === PaymentType.LOAN_REPAYMENT ? selectedLoanId : undefined
+        });
+        setAmount('');
+        setFile(null);
+        setSelectedLoanId('');
+        // loadData is called by realtimeService, so no need to call it here explicitly
+      } catch (error) {
+        console.error('Failed to submit payment:', error);
+        // Optionally show an error message
+      } finally {
+        setLoading(false);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -101,7 +132,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           <h1 className="text-3xl font-bold text-slate-800">Hello, {user.name}</h1>
           <p className="text-slate-500">Member ID: <span className="font-mono font-bold text-indigo-600">{user.jerseyNumber}</span></p>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex flex-wrap gap-4 items-center"> {/* Added flex-wrap for smaller screens */}
             <nav className="flex bg-slate-100 p-1 rounded-xl">
                 <button onClick={() => setActiveView('OVERVIEW')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeView === 'OVERVIEW' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Overview</button>
                 <button onClick={() => setActiveView('LOANS')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeView === 'LOANS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Loans</button>

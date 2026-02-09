@@ -1,43 +1,35 @@
 
-import { mockServer } from '../backend/mockServer';
+import { backendApi } from '../backend/api';
 import { User, Payment, PaymentStatus } from '../types';
 
+// In a real application, this would be your deployed backend URL (e.g., 'https://your-api.com')
+// For this simulation, we directly call backendApi functions.
+// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api'; 
+
 export const api = {
-  login: mockServer.login,
-  register: mockServer.register,
-  updatePassword: mockServer.updatePassword,
-  submitPayment: mockServer.submitPayment,
+  login: backendApi.login,
+  register: backendApi.register,
+  updatePassword: backendApi.updatePassword,
+  submitPayment: backendApi.submitPayment,
   
-  // Data fetchers
+  // Data fetchers - now calling the backend's data aggregation functions
   getClientDashboard: async (clientId: string) => {
-    const data = await mockServer.getAllData();
-    return {
-      payments: data.payments.filter(p => p.clientId === clientId),
-      notifications: data.notifications.filter(n => n.recipientId === clientId || n.recipientId === 'ALL'),
-      settings: data.settings,
-      loans: data.loans.filter(l => l.clientId === clientId)
-    };
+    // Conceptually, this would be a fetch call: fetch(`${API_BASE_URL}/client/dashboard/${clientId}`)
+    // For simulation, we directly call the backend function:
+    return backendApi.getClientDashboardData(clientId);
   },
 
   getManagerDashboard: async () => {
-    const data = await mockServer.getAllData();
-    return {
-      pendingUsers: data.users.filter(u => u.status === 'PENDING'),
-      allUsers: data.users,
-      activeClients: data.users.filter(u => u.status === 'APPROVED' && u.role === 'CLIENT'),
-      pendingPayments: data.payments.filter(p => p.status === 'PENDING'),
-      allPayments: data.payments,
-      settings: data.settings,
-      allLoans: data.loans
-    };
+    // Conceptually: fetch(`${API_BASE_URL}/manager/dashboard`)
+    return backendApi.getManagerDashboardData();
   },
 
-  approveClient: mockServer.approveUser,
-  rejectClient: mockServer.rejectUser,
-  deleteUser: mockServer.deleteUser,
-  adminResetPassword: mockServer.resetUserPassword,
-  processPayment: mockServer.updatePaymentStatus,
-  broadcast: mockServer.sendNotification,
-  updateSettings: mockServer.updateSettings,
-  issueLoan: mockServer.issueLoan
+  approveClient: backendApi.approveUser,
+  rejectClient: backendApi.rejectUser,
+  deleteUser: backendApi.deleteUser,
+  adminResetPassword: backendApi.resetUserPassword,
+  processPayment: backendApi.updatePaymentStatus,
+  broadcast: backendApi.sendNotification,
+  updateSettings: backendApi.updateSettings,
+  issueLoan: backendApi.issueLoan
 };
